@@ -1,7 +1,14 @@
+// Copyright (C) 2026 những người đóng góp 2oLang
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Chương trình này là phần mềm tự do: bạn có thể phân phối lại và/hoặc sửa đổi nó theo các điều khoản của
+// Giấy phép Công cộng GNU phiên bản 3 hoặc (tuỳ bạn chọn) bất kỳ phiên bản nào sau đó. Xem file LICENSE.
+// Chương trình được phân phối với hy vọng hữu ích nhưng KHÔNG CÓ BẢO HÀNH NÀO.
+
 // 2oLang compiler - chương trình chính
 //   ./2oLang <file.2o> '-(<mục tiêu>)->' <file đầu ra>
 #include <sys/stat.h>
 
+#include <algorithm>
 #include <cstdio>
 #include <cstring>
 #include <fstream>
@@ -63,6 +70,21 @@ static void printError(const CompileError& e) {
     }
 }
 
+// In mọi lỗi đã gom được (theo thứ tự file, dòng, cột) rồi tổng số lỗi. Trả mã thoát 1.
+static int reportAll() {
+    auto& errs = allErrors();
+    std::stable_sort(errs.begin(), errs.end(), [](const CompileError& a, const CompileError& b) {
+        if (a.pos.file != b.pos.file) return a.pos.file < b.pos.file;
+        if (a.pos.line != b.pos.line) return a.pos.line < b.pos.line;
+        return a.pos.col < b.pos.col;
+    });
+    const size_t kMax = 100;
+    for (size_t i = 0; i < errs.size() && i < kMax; i++) printError(errs[i]);
+    if (errs.size() > kMax) std::cerr << "... và " << errs.size() - kMax << " lỗi nữa (chỉ hiển thị " << kMax << " lỗi đầu)\n";
+    std::cerr << "\nTìm thấy " << errs.size() << " lỗi, không tạo file đầu ra.\n";
+    return 1;
+}
+
 struct Loader {
     std::vector<std::unique_ptr<Module>> owned;
     std::vector<Module*> order;  // phụ thuộc trước, module chính cuối
@@ -70,12 +92,16 @@ struct Loader {
 
     Module* load(const std::string& path, const Pos& from, bool isMain) {
         std::string key = canon(path);
-        if (stack.count(key)) fail(from, "#import vòng tròn: " + path);
+        if (stack.count(key)) {
+            reportError(CompileError(from, "#import vòng tròn: " + path));
+            return nullptr;
+        }
         if (done.count(key)) return nullptr;
         std::string src;
         if (!readFile(path, src)) {
             if (isMain) throw std::runtime_error("không đọc được file: " + path);
-            fail(from, "không tìm thấy file import: " + path);
+            reportError(CompileError(from, "không tìm thấy file import: " + path));
+            return nullptr;
         }
         int id = registerFile(path);
         g_src[id] = src;
@@ -170,8 +196,10 @@ int main(int argc, char** argv) {
 
         Loader ld;
         ld.load(input, Pos{0, 0, 0}, true);
+        if (!allErrors().empty()) return reportAll();  // lỗi cú pháp: báo hết rồi dừng
         std::vector<Module*> mods = ld.order;
         std::vector<uint8_t> img = generate(tg, rt, mods);
+        if (!allErrors().empty()) return reportAll();  // lỗi ngữ nghĩa
 
         std::ofstream out(output, std::ios::binary | std::ios::trunc);
         if (!out) {
@@ -183,8 +211,8 @@ int main(int argc, char** argv) {
         if (tg.fmt != Fmt::FLAT) chmod(output.c_str(), 0755);
         std::cout << "OK: " << input << " -> " << output << " [" << targetName << ", " << img.size() << " byte]\n";
     } catch (const CompileError& e) {
-        printError(e);
-        return 1;
+        reportError(e);
+        return reportAll();
     } catch (const std::exception& e) {
         std::cerr << "lỗi: " << e.what() << "\n";
         return 1;

@@ -1,8 +1,7 @@
 name: build
 
+# Chỉ chạy khi bấm tay: tab Actions -> build -> Run workflow
 on:
-  push:
-  pull_request:
   workflow_dispatch:
 
 jobs:

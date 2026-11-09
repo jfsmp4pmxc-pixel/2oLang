@@ -130,6 +130,14 @@ Phím hỗ trợ: chữ cái, số, `enter esc tab space backspace delete home e
 
 File được import chỉ cần chứa `define`, `obj`, `global`, `var`; `entry` của nó bị bỏ qua. `var` của mỗi file là riêng của file đó, `global`, hàm và `obj` dùng chung.
 
+## Báo lỗi
+
+Trình biên dịch báo **toàn bộ lỗi trong một lần chạy** thay vì dừng ở lỗi đầu tiên. Mỗi lỗi có `file:dòng:cột`, dòng mã và dấu `^`, cuối cùng là tổng số lỗi; khi có lỗi thì không tạo file đầu ra.
+
+- Lỗi cú pháp (ký tự lạ, chuỗi chưa đóng, thiếu `;`, `)`, `}` ...): parser bỏ câu lệnh hỏng rồi đọc tiếp từ ranh giới câu lệnh kế tiếp. Nếu có lỗi cú pháp thì dừng sau bước này.
+- Lỗi ngữ nghĩa (biến/hàm chưa khai báo, sai số tham số, trùng tên, truy xuất `private`, sai kiểu ở giá trị viết thẳng ...): được gom cho cả chương trình, mỗi câu lệnh báo tối đa một lỗi.
+- Một lỗi có thể kéo theo lỗi phụ (ví dụ khai báo hỏng thì chỗ dùng biến đó báo "chưa khai báo"); hãy sửa từ trên xuống. Tối đa 100 lỗi được in.
+
 ## Cách hoạt động
 
 ```
@@ -153,3 +161,9 @@ Giá trị lúc chạy là một từ máy: bit thấp bằng 1 là số nguyên
 ## Test
 
 `make test` biên dịch và chạy mọi chương trình trong `tests/cases` (cả 32 và 64 bit) rồi so với `.out`, kiểm tra các thông báo lỗi trong `tests/errors`, và kiểm tra các mục tiêu `i386`, `x86_64`, `MacOS` biên dịch được.
+
+## Giấy phép
+
+2oLang là phần mềm tự do, phát hành theo **Giấy phép Công cộng GNU phiên bản 3** (GPL-3.0-or-later). Toàn văn nằm trong file [LICENSE](LICENSE).
+
+Giấy phép này áp dụng cho trình biên dịch. Chương trình `.2o` bạn viết và biên dịch ra vẫn thuộc về bạn; tuy vậy mỗi file thực thi đều chứa kèm runtime của 2oLang (`src/rt_core.inc`, `src/rt_io.inc`), nên hãy tự xem xét điều khoản GPL khi phân phối nó.

@@ -1,3 +1,9 @@
+// Copyright (C) 2026 những người đóng góp 2oLang
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Chương trình này là phần mềm tự do: bạn có thể phân phối lại và/hoặc sửa đổi nó theo các điều khoản của
+// Giấy phép Công cộng GNU phiên bản 3 hoặc (tuỳ bạn chọn) bất kỳ phiên bản nào sau đó. Xem file LICENSE.
+// Chương trình được phân phối với hy vọng hữu ích nhưng KHÔNG CÓ BẢO HÀNH NÀO.
+
 // 2oLang compiler - parser (đệ quy xuống)
 #include <set>
 
@@ -379,13 +385,86 @@ struct Parser {
         return e;
     }
 
+    // ---------------- phục hồi sau lỗi ----------------
+    static bool isStmtStart(const Token& k) {
+        static const std::set<std::string> kw = {"msg", "if", "while", "break", "continue", "return", "exit", "db", "int",
+                                                 "float", "string", "drive", "define", "obj", "global", "var", "entry",
+                                                 "public", "private"};
+        return k.kind == T::Ident && kw.count(k.text);
+    }
+    static void note(const CompileError& e) { reportError(e); }
+
+    // Bỏ token cho tới ranh giới câu lệnh kế tiếp: sau ';', sau một khối {...} đã đóng,
+    // trước '}' của khối bao ngoài, hoặc trước từ khoá mở đầu câu lệnh ở đầu dòng mới.
+    void syncStmt(size_t st) {
+        int depth = 0;
+        while (!atEof()) {
+            if (isOp(";") && depth == 0) {
+                next();
+                break;
+            }
+            if (isOp("}")) {
+                if (depth == 0) break;
+                depth--;
+                next();
+                if (depth == 0) break;
+                continue;
+            }
+            if (isOp("{")) {
+                depth++;
+                next();
+                continue;
+            }
+            if (depth == 0 && p > st && cur().nl && isStmtStart(cur())) break;
+            next();
+        }
+        if (p == st && !atEof()) next();  // luôn tiến lên ít nhất một token
+    }
+
+    // Bỏ token cho tới khai báo cấp cao kế tiếp (global/var/entry/define/obj/#import ở đầu dòng).
+    void syncTop(size_t st) {
+        int depth = 0;
+        for (size_t k = st; k < p; k++) {
+            if (t[k].kind == T::Op && t[k].text == "{") depth++;
+            else if (t[k].kind == T::Op && t[k].text == "}") depth--;
+        }
+        if (depth < 0) depth = 0;
+        while (!atEof()) {
+            if (isOp("{")) {
+                depth++;
+                next();
+                continue;
+            }
+            if (isOp("}")) {
+                if (depth > 0) depth--;
+                next();
+                if (depth == 0) break;
+                continue;
+            }
+            if (depth == 0 && p > st && cur().nl &&
+                (isId("global") || isId("var") || isId("entry") || isId("define") || isId("obj") || isOp("#")))
+                break;
+            next();
+        }
+        if (p == st && !atEof()) next();
+    }
+
     // ---------------- câu lệnh ----------------
     Block parseBlock() {
         expectOp("{");
         Block b;
         while (!isOp("}")) {
-            if (atEof()) err("thiếu '}' đóng khối");
-            b.s.push_back(parseStmt());
+            if (atEof()) {
+                note(CompileError(cur().pos, "thiếu '}' đóng khối"));
+                return b;
+            }
+            size_t st = p;
+            try {
+                b.s.push_back(parseStmt());
+            } catch (CompileError& e) {
+                note(e);
+                syncStmt(st);
+            }
         }
         next();
         return b;
@@ -407,8 +486,12 @@ struct Parser {
         }
         if (cur().kind == T::Ident) {
             const std::string w = cur().text;
-            if (w == "db" || (kTypes.count(w) && !(w == "drive" && isOpAt(1, "(")) && peekTok().kind == T::Ident))
-                err("trong hàm/entry không khai báo bằng db hoặc kiểu dữ liệu; chỉ cần viết: ten = giá_trị;");
+            if (w == "db" || (kTypes.count(w) && !(w == "drive" && isOpAt(1, "(")) && peekTok().kind == T::Ident)) {
+                note(CompileError(cur().pos, "trong hàm/entry không khai báo bằng db hoặc kiểu dữ liệu; chỉ cần viết: ten = giá_trị;"));
+                if (w == "db") next();
+                if (cur().kind == T::Ident && kTypes.count(cur().text) && peekTok().kind == T::Ident) next();
+                // phần còn lại được đọc như một phép gán bình thường
+            }
             if (w == "msg") {
                 next();
                 auto s = mkS(SK::Msg, ps);
@@ -497,11 +580,11 @@ struct Parser {
         Pos ps = cur().pos;
         auto s = mkS(SK::Decl, ps);
         if (isId("db")) {
-            if (!needDb) err("trong global không dùng db; viết: int a = 6;");
+            if (!needDb) note(CompileError(cur().pos, "trong global không dùng db; viết: int a = 6;"));
             next();
             s->db = true;
         } else if (needDb) {
-            err("trong var phải khai báo bằng db; viết: db int a = 6;");
+            note(CompileError(cur().pos, "trong var phải khai báo bằng db; viết: db int a = 6;"));
         }
         Pos tp = cur().pos;
         s->type = expectIdent("kiểu dữ liệu (int, float, string, drive)");
@@ -522,8 +605,17 @@ struct Parser {
     void parseVarBlock(std::vector<StmtP>& out, bool needDb) {
         expectOp("{");
         while (!isOp("}")) {
-            if (atEof()) err("thiếu '}' đóng khối");
-            out.push_back(parseDecl(needDb));
+            if (atEof()) {
+                note(CompileError(cur().pos, "thiếu '}' đóng khối"));
+                return;
+            }
+            size_t st = p;
+            try {
+                out.push_back(parseDecl(needDb));
+            } catch (CompileError& e) {
+                note(e);
+                syncStmt(st);
+            }
         }
         next();
     }
@@ -539,16 +631,22 @@ struct Parser {
             expectOp("{");
             while (!isOp("}")) {
                 if (atEof()) err("thiếu '}' đóng khối");
-                ObjField f;
-                f.pos = cur().pos;
-                f.priv = priv;
-                f.name = expectName("tên trường");
-                if (isOp("=")) {
-                    next();
-                    f.init = parseExpr();
+                size_t st = p;
+                try {
+                    ObjField f;
+                    f.pos = cur().pos;
+                    f.priv = priv;
+                    f.name = expectName("tên trường");
+                    if (isOp("=")) {
+                        next();
+                        f.init = parseExpr();
+                    }
+                    endStmt();
+                    o.fields.push_back(std::move(f));
+                } catch (CompileError& e) {
+                    note(e);
+                    syncStmt(st);
                 }
-                endStmt();
-                o.fields.push_back(std::move(f));
             }
             next();
         }
@@ -556,9 +654,7 @@ struct Parser {
         m.objs.push_back(std::move(o));
     }
 
-    Module parseModule() {
-        Module m;
-        while (!atEof()) {
+    void parseTop(Module& m) {
             Pos ps = cur().pos;
             if (isOp("#")) {
                 next();
@@ -604,6 +700,18 @@ struct Parser {
                 parseObj(m);
             } else {
                 err("ở cấp ngoài cùng chỉ có thể có global, var, define, obj, entry hoặc #import (gặp " + describe(cur()) + ")");
+            }
+    }
+
+    Module parseModule() {
+        Module m;
+        while (!atEof()) {
+            size_t st = p;
+            try {
+                parseTop(m);
+            } catch (CompileError& e) {
+                note(e);
+                syncTop(st);
             }
         }
         return m;

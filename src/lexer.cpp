@@ -1,3 +1,9 @@
+// Copyright (C) 2026 những người đóng góp 2oLang
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Chương trình này là phần mềm tự do: bạn có thể phân phối lại và/hoặc sửa đổi nó theo các điều khoản của
+// Giấy phép Công cộng GNU phiên bản 3 hoặc (tuỳ bạn chọn) bất kỳ phiên bản nào sau đó. Xem file LICENSE.
+// Chương trình được phân phối với hy vọng hữu ích nhưng KHÔNG CÓ BẢO HÀNH NÀO.
+
 // 2oLang compiler - lexer
 #include <cctype>
 #include <cmath>
@@ -10,6 +16,16 @@ static std::vector<std::string> g_files;
 int registerFile(const std::string& name) {
     g_files.push_back(name);
     return (int)g_files.size() - 1;
+}
+
+static std::vector<CompileError> g_errors;
+
+std::vector<CompileError>& allErrors() { return g_errors; }
+
+void reportError(const CompileError& e) {
+    for (auto& x : g_errors)  // bỏ lỗi trùng (cùng vị trí, cùng nội dung)
+        if (x.pos.file == e.pos.file && x.pos.line == e.pos.line && x.pos.col == e.pos.col && std::string(x.what()) == e.what()) return;
+    g_errors.push_back(e);
 }
 
 std::string posStr(const Pos& p) {
@@ -64,12 +80,19 @@ struct Lexer {
                     adv();
                     n++;
                 }
-                if (n == 0) fail(p, "escape \\x cần ít nhất một chữ số hex");
+                if (n == 0) {
+                    reportError(CompileError(p, "escape \\x cần ít nhất một chữ số hex"));
+                    return;
+                }
                 out += (char)v;
                 return;
             }
             default:
-                fail(p, std::string("escape không hợp lệ: \\") + c);
+                if (c == '\n' || c == '\0') {  // '\' ở cuối dòng: để vòng chuỗi báo "chưa đóng"
+                    reportError(CompileError(p, "escape '\\' ở cuối dòng không hợp lệ"));
+                    return;
+                }
+                reportError(CompileError(p, std::string("escape không hợp lệ: \\") + c));  // bỏ qua ký tự này
         }
         adv();
     }
@@ -96,9 +119,11 @@ struct Lexer {
                         if (cur() == '\n') nl = true;
                         adv();
                     }
-                    if (i >= s.size()) fail(p, "comment /* ... */ chưa đóng");
-                    adv();
-                    adv();
+                    if (i >= s.size()) reportError(CompileError(p, "comment /* ... */ chưa đóng"));
+                    else {
+                        adv();
+                        adv();
+                    }
                 } else {
                     break;
                 }
@@ -147,7 +172,10 @@ struct Lexer {
                 adv();
                 std::string v;
                 while (true) {
-                    if (i >= s.size() || cur() == '\n') fail(p, "chuỗi chưa đóng dấu \"");
+                    if (i >= s.size() || cur() == '\n') {
+                        reportError(CompileError(p, "chuỗi chưa đóng dấu \""));
+                        break;  // coi như chuỗi kết thúc ở cuối dòng
+                    }
                     if (cur() == '"') {
                         adv();
                         break;
@@ -174,7 +202,10 @@ struct Lexer {
                     t.text = std::string(1, (char)c);
                     adv();
                 } else {
-                    fail(t.pos, std::string("ký tự không hợp lệ: '") + (char)c + "'");
+                    reportError(CompileError(t.pos, std::string("ký tự không hợp lệ: '") + (char)c + "'"));
+                    adv();
+                    nl = t.nl;
+                    continue;  // bỏ ký tự lạ rồi đọc tiếp
                 }
             }
             out.push_back(std::move(t));

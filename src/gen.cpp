@@ -1,9 +1,25 @@
+// Copyright (C) 2026 những người đóng góp 2oLang
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Chương trình này là phần mềm tự do: bạn có thể phân phối lại và/hoặc sửa đổi nó theo các điều khoản của
+// Giấy phép Công cộng GNU phiên bản 3 hoặc (tuỳ bạn chọn) bất kỳ phiên bản nào sau đó. Xem file LICENSE.
+// Chương trình được phân phối với hy vọng hữu ích nhưng KHÔNG CÓ BẢO HÀNH NÀO.
+
 // 2oLang compiler - sinh mã: vùng data, hàm, câu lệnh, chương trình chính
 #include "gen.hpp"
 
 #include <cstring>
 
 static const uint32_t kCells = 64 * 8;  // 64 ô runtime ở đầu vùng data
+
+// Chạy f; nếu có lỗi biên dịch thì ghi lại rồi đi tiếp, để báo hết lỗi một lượt.
+template <class F>
+static void guarded(F f) {
+    try {
+        f();
+    } catch (CompileError& e) {
+        reportError(e);
+    }
+}
 
 // ============================ vùng data ============================
 uint32_t Gen::dataAlloc(size_t n) {
@@ -191,7 +207,10 @@ void Gen::emitFunction(const FnInfo& fi, const FuncDef& f) {
     cx.mod = fi.mod;
     size_t n = f.params.size();
     for (size_t j = 0; j < n; j++) {
-        if (cx.slots.count(f.params[j])) fail(f.pos, "tham số '" + f.params[j] + "' bị trùng tên");
+        if (cx.slots.count(f.params[j])) {
+            reportError(CompileError(f.pos, "tham số '" + f.params[j] + "' bị trùng tên"));
+            continue;
+        }
         cx.slots[f.params[j]] = (int32_t)(2 * W + (n - 1 - j) * W);
     }
     std::vector<std::string> locals;
@@ -282,15 +301,21 @@ void Gen::emitMain(Module& mainMod, std::vector<Module*>& mods) {
     for (int i = 0; i < nl; i++) as.pushI(0);
     cx.retLabel = as.newLabel();
     for (Module* m : mods) {
-        for (auto& d : m->globals) emitDeclInit(*d, m->id, true);
-        for (auto& d : m->vars) emitDeclInit(*d, m->id, false);
+        for (auto& d : m->globals) guarded([&] { emitDeclInit(*d, m->id, true); });
+        for (auto& d : m->vars) guarded([&] { emitDeclInit(*d, m->id, false); });
         for (auto& o : m->objs)
             for (auto& f : o.fields) {
                 cx.mod = m->id;
-                if (f.init) eval(*f.init);
-                else as.movRI(EAX, 0);
-                as.leaData(ECX, objs.at(o.name).fields.at(f.name).first);
-                as.store(ECX, 0, EAX);
+                guarded([&] {
+                    auto oi = objs.find(o.name);
+                    if (oi == objs.end()) return;
+                    auto fi = oi->second.fields.find(f.name);
+                    if (fi == oi->second.fields.end()) return;
+                    if (f.init) eval(*f.init);
+                    else as.movRI(EAX, 0);
+                    as.leaData(ECX, fi->second.first);
+                    as.store(ECX, 0, EAX);
+                });
             }
     }
     cx.mod = mainMod.id;
@@ -303,7 +328,7 @@ void Gen::emitMain(Module& mainMod, std::vector<Module*>& mods) {
 
 // ============================ câu lệnh ============================
 void Gen::emitBlock(const Block& b) {
-    for (auto& s : b.s) emitStmt(*s);
+    for (auto& s : b.s) guarded([&] { emitStmt(*s); });
 }
 
 void Gen::emitStmt(const Stmt& s) {
@@ -345,7 +370,7 @@ void Gen::emitStmt(const Stmt& s) {
             int end = as.newLabel();
             for (size_t i = 0; i < s.conds.size(); i++) {
                 int next = as.newLabel();
-                jumpIfFalse(*s.conds[i], next);
+                guarded([&] { jumpIfFalse(*s.conds[i], next); });
                 emitBlock(s.blocks[i]);
                 as.jmp(end);
                 as.bind(next);
@@ -357,7 +382,7 @@ void Gen::emitStmt(const Stmt& s) {
         case SK::While: {
             int top = as.newLabel(), end = as.newLabel();
             as.bind(top);
-            if (s.e) jumpIfFalse(*s.e, end);
+            if (s.e) guarded([&] { jumpIfFalse(*s.e, end); });
             cx.loops.push_back({end, top, s.whileForever});
             emitBlock(s.body);
             cx.loops.pop_back();
@@ -394,29 +419,44 @@ std::vector<uint8_t> generate(const Target& t, Module& rt, std::vector<Module*>&
     Gen g(t);
     g.data.assign(kCells, 0);
     Module& mainMod = *mods.back();
-    if (!mainMod.hasGlobal) fail(Pos{mainMod.id, 1, 1}, "thiếu khối bắt buộc: global { }");
-    if (!mainMod.hasVar) fail(Pos{mainMod.id, 1, 1}, "thiếu khối bắt buộc: var { }");
-    if (!mainMod.hasEntry) fail(Pos{mainMod.id, 1, 1}, "thiếu khối bắt buộc: entry { }");
+    auto need = [&](bool has, const char* what) {
+        if (!has) reportError(CompileError(Pos{mainMod.id, 1, 1}, std::string("thiếu khối bắt buộc: ") + what));
+    };
+    need(mainMod.hasGlobal, "global { }");
+    need(mainMod.hasVar, "var { }");
+    need(mainMod.hasEntry, "entry { }");
 
     for (auto& f : rt.funcs) g.registerFn(f, -1, true);
     for (Module* m : mods) {
-        for (auto& f : m->funcs) g.registerFn(f, m->id, false);
+        for (auto& f : m->funcs) guarded([&] { g.registerFn(f, m->id, false); });
         for (auto& d : m->globals) {
             std::string k = "g:" + d->name;
-            if (g.vars.count(k)) fail(d->pos, "biến global '" + d->name + "' bị khai báo hai lần");
+            if (g.vars.count(k)) {
+                reportError(CompileError(d->pos, "biến global '" + d->name + "' bị khai báo hai lần"));
+                continue;
+            }
             g.vars[k] = g.dataAlloc(g.W);
         }
         for (auto& d : m->vars) {
             std::string k = std::to_string(m->id) + ":" + d->name;
-            if (g.vars.count(k)) fail(d->pos, "biến '" + d->name + "' bị khai báo hai lần trong var");
+            if (g.vars.count(k)) {
+                reportError(CompileError(d->pos, "biến '" + d->name + "' bị khai báo hai lần trong var"));
+                continue;
+            }
             g.vars[k] = g.dataAlloc(g.W);
         }
         for (auto& o : m->objs) {
-            if (g.objs.count(o.name)) fail(o.pos, "đối tượng '" + o.name + "' bị khai báo hai lần");
+            if (g.objs.count(o.name)) {
+                reportError(CompileError(o.pos, "đối tượng '" + o.name + "' bị khai báo hai lần"));
+                continue;
+            }
             ObjInfo oi;
             oi.pos = o.pos;
             for (auto& f : o.fields) {
-                if (oi.fields.count(f.name)) fail(f.pos, "trường '" + f.name + "' bị khai báo hai lần trong '" + o.name + "'");
+                if (oi.fields.count(f.name)) {
+                    reportError(CompileError(f.pos, "trường '" + f.name + "' bị khai báo hai lần trong '" + o.name + "'"));
+                    continue;
+                }
                 oi.fields[f.name] = {g.dataAlloc(g.W), f.priv};
             }
             g.objs[o.name] = std::move(oi);
@@ -425,7 +465,8 @@ std::vector<uint8_t> generate(const Target& t, Module& rt, std::vector<Module*>&
     g.emitMain(mainMod, mods);
     for (auto& kv : std::map<std::string, FnInfo>(g.fns)) {
         if (!kv.second.defined) throw std::runtime_error("hàm chưa định nghĩa: " + kv.first);
-        g.emitFunction(kv.second, *kv.second.def);
+        guarded([&] { g.emitFunction(kv.second, *kv.second.def); });
     }
+    if (!allErrors().empty()) return {};  // có lỗi: không tạo file đầu ra
     return buildImage(t, g.as, g.data);
 }

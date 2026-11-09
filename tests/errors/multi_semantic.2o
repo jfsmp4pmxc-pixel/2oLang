@@ -1,0 +1,33 @@
+// ERROR: giá trị không khớp kiểu int
+// ERROR: giá trị không khớp kiểu float
+// ERROR: chỉ truy xuất được trong entry
+// ERROR: tham số 'p' bị trùng tên
+// ERROR: hàm 'hello' đã được định nghĩa
+// ERROR: biến 'chua_khai_bao' chưa được khai báo
+// ERROR: biến 'khac_chua' chưa được khai báo
+// ERROR: cần 0 tham số nhưng được gọi với 1
+// ERROR: hàm 'khong_co_ham' chưa được định nghĩa
+// ERROR: không thoát được bằng break
+// ERROR: không có trường 'khong_co'
+// ERROR: chỉ dùng được trong vòng lặp while
+// COUNT: 12
+global {}
+var {
+    db int a = "x";
+    db float b = "y";
+}
+obj Mike { private { tai_san = 1; } }
+define test() { Mike.tai_san = 9; }
+define hello(p, p) { return p; }
+define hello() { }
+entry {
+    msg chua_khai_bao;
+    msg khac_chua;
+    test(1);
+    khong_co_ham();
+    while (true) { break; }
+    Mike.khong_co = 3;
+    msg 5;
+    break;
+    x = 1;
+}

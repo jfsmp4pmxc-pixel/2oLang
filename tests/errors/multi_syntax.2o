@@ -1,0 +1,29 @@
+// ERROR: trong global không dùng db
+// ERROR: trong var phải khai báo bằng db
+// ERROR: chuỗi chưa đóng
+// ERROR: mong đợi ')' nhưng gặp '{'
+// ERROR: trong hàm/entry không khai báo bằng db
+// ERROR: ký tự không hợp lệ: '@'
+// ERROR: escape không hợp lệ: \q
+// COUNT: 9
+global {
+    db int a = 1;
+}
+var {
+    int b = 2;
+    db string s = "chưa đóng;
+    db int c = ;
+}
+define f(x {
+    return x;
+}
+define g(x) {
+    msg 1 +;
+    y = 2 3;
+    db int z = 4;
+    msg "ok";
+}
+entry {
+    msg @ "lạ";
+    msg "a" "\q";
+}
