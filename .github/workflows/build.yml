@@ -28,7 +28,7 @@ jobs:
       - name: Build và test trong Alpine x86_64
         run: |
           docker run --rm -v "$PWD":/w -w /w alpine:3.20 sh -c \
-            "apk add --no-cache g++ make && make static && make test"
+            "apk add --no-cache g++ make bash && make static && make test"
       - uses: actions/upload-artifact@v4
         with:
           name: 2oLang-alpine-x86_64
@@ -42,7 +42,7 @@ jobs:
       - name: Build và test trong Alpine i386
         run: |
           docker run --rm --platform linux/386 -v "$PWD":/w -w /w i386/alpine:3.20 sh -c \
-            "apk add --no-cache g++ make && make static && make test"
+            "apk add --no-cache g++ make bash && make static && make test"
       - uses: actions/upload-artifact@v4
         with:
           name: 2oLang-alpine-i386
