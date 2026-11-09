@@ -1,0 +1,11 @@
+// input: chuỗi, một dòng, và tổ hợp phím (dữ liệu vào từ file .in)
+global {}
+var {}
+entry {
+    msg "gõ help: ";
+    if (input "help") { msg "đúng\n"; } else { msg "sai\n"; }
+    msg "tên: ";
+    ten = input;
+    msg "xin chào " + ten + "!\n";
+    if (input alt + f4) { msg "alt+f4\n"; } else { msg "phím khác\n"; }
+}

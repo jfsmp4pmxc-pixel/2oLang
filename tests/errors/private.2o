@@ -1,0 +1,6 @@
+// ERROR: chỉ truy xuất được trong entry
+global {}
+var {}
+obj Mike { private { tai_san = 1 } }
+define test() { Mike.tai_san = 9 }
+entry { test() }

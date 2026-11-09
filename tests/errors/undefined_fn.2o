@@ -1,0 +1,4 @@
+// ERROR: chưa được định nghĩa
+global {}
+var {}
+entry { foo(); }

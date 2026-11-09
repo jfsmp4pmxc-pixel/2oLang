@@ -1,0 +1,4 @@
+// ERROR: màu không hỗ trợ
+global {}
+var {}
+entry { msg "x", pink; }

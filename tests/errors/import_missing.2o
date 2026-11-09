@@ -1,0 +1,5 @@
+// ERROR: không tìm thấy file import
+#import "khong_co.2o"
+global {}
+var {}
+entry {}

@@ -1,0 +1,4 @@
+// ERROR: trong global không dùng db
+global { db int a = 1; }
+var {}
+entry {}

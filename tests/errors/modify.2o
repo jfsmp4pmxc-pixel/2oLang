@@ -1,0 +1,6 @@
+// ERROR: chỉ entry mới có quyền sửa
+global {}
+var {}
+obj Mike { public { tuoi = 1 } }
+define test() { Mike.tuoi = 9 }
+entry { test() }

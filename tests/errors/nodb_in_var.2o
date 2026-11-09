@@ -1,0 +1,4 @@
+// ERROR: trong var phải khai báo bằng db
+global {}
+var { int a = 1; }
+entry {}

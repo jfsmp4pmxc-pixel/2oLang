@@ -1,0 +1,4 @@
+// ERROR: không thoát được bằng break
+global {}
+var {}
+entry { while (true) { break; } }

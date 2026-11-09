@@ -1,0 +1,54 @@
+// Ví dụ tổng hợp: biến, toán tử, chuỗi, rẽ nhánh, vòng lặp, hàm, đối tượng, drive
+global {
+    int diem = 0;
+}
+
+var {
+    db int hp = 60;
+    db float pi = 3.14159;
+    db string ten = "Peter";
+    db string ho = "Griffin";
+    db drive foods = "apple", "fish", "potato";
+}
+
+obj Mike {
+    public {
+        tuoi = 25;
+    }
+    private {
+        tai_san = 15000;
+    }
+}
+
+define binh_phuong(x) {
+    return x * x;
+}
+
+entry {
+    msg "my name is: " + ten ho + "\n";
+    msg "pi * 2 = " + (pi * 2) + "\n", cyan;
+
+    if (hp > 75) {msg "ổn\n", green;}
+    else if (hp > 1 and hp < 75) {msg "cẩn thận\n", yellow;}
+    else {msg "thua\n", red;}
+
+    i = 0;
+    while (i < 5) {
+        i = i + 1;
+        diem = diem + binh_phuong(i);
+        msg i"\n";
+    }
+    msg "diem = " + diem + "\n";
+
+    drive(foods).add("chanh", 2);
+    drive(foods).rm("fish");
+    msg foods;
+    msg "\n";
+    msg "so phần tử: " + element foods + "\n";
+
+    Mike.tai_san = 15000^2;
+    msg Mike.tuoi"\n";
+    msg Mike.tai_san"\n";
+    msg "xúc xắc: " + random(1 to 6) + "\n";
+    exit;
+}

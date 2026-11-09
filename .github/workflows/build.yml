@@ -1,0 +1,68 @@
+name: build
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  # Ubuntu: build trực tiếp trên runner, chạy toàn bộ test (ELF 64 bit và 32 bit)
+  ubuntu:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build
+        run: make
+      - name: Test
+        run: make test
+      - uses: actions/upload-artifact@v4
+        with:
+          name: 2oLang-ubuntu-x86_64
+          path: 2oLang
+
+  # Alpine Linux 64 bit (musl, build tĩnh)
+  alpine-64:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build và test trong Alpine x86_64
+        run: |
+          docker run --rm -v "$PWD":/w -w /w alpine:3.20 sh -c \
+            "apk add --no-cache g++ make && make static && make test"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: 2oLang-alpine-x86_64
+          path: 2oLang
+
+  # Alpine Linux 32 bit (i386, musl, build tĩnh)
+  alpine-32:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build và test trong Alpine i386
+        run: |
+          docker run --rm --platform linux/386 -v "$PWD":/w -w /w i386/alpine:3.20 sh -c \
+            "apk add --no-cache g++ make && make static && make test"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: 2oLang-alpine-i386
+          path: 2oLang
+
+  # macOS (Intel): build trình biên dịch, biên dịch sang Mach-O rồi chạy thử.
+  # Mục tiêu MacOS chưa được kiểm chứng trên máy thật, nên job này không chặn pipeline.
+  macos:
+    runs-on: macos-15-intel
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build
+        run: make
+      - name: Biên dịch và chạy Mach-O
+        run: |
+          ./2oLang tests/cases/01_basic.2o '-(MacOS)->' basic_mac
+          ./basic_mac > basic_mac.txt
+          diff tests/cases/01_basic.out basic_mac.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: 2oLang-macos-x86_64
+          path: 2oLang

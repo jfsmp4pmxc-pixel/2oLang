@@ -1,0 +1,5 @@
+// ERROR: cần 1 tham số
+global {}
+var {}
+define f(a) { return a }
+entry { f(1, 2); }

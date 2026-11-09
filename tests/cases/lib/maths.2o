@@ -1,0 +1,7 @@
+global {}
+var {}
+define binh_phuong(x) { return x * x; }
+define lon_nhat(a, b) {
+    if (a > b) { return a; }
+    return b;
+}

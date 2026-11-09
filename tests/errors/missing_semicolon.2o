@@ -1,0 +1,4 @@
+// ERROR: thiếu ';'
+global {}
+var {}
+entry { msg "a" msg "b" }

@@ -1,0 +1,4 @@
+// ERROR: chưa được khai báo
+global {}
+var {}
+entry { msg zzz; }

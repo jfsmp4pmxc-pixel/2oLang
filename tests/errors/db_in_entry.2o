@@ -1,0 +1,4 @@
+// ERROR: không khai báo bằng db
+global {}
+var {}
+entry { db int a = 1; }

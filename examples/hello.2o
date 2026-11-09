@@ -1,0 +1,9 @@
+global {
+}
+
+var {
+}
+
+entry {
+    msg "hello world!!!\n", white;
+}

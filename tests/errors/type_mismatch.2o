@@ -1,0 +1,4 @@
+// ERROR: không khớp kiểu int
+global {}
+var { db int a = "x"; }
+entry {}

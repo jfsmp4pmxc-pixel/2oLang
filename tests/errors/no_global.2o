@@ -1,0 +1,3 @@
+// ERROR: thiếu khối bắt buộc: global
+var {}
+entry { }

@@ -1,0 +1,96 @@
+// điều kiện, vòng lặp, hàm, đối tượng, thao tác drive, random, exit
+global {
+    int total = 0;
+}
+
+var {
+    db int i = 0;
+    db int hp = 50;
+    db drive a = "táo", "xoài", "cam";
+}
+
+obj Mike {
+    public {
+        tuoi = 25;
+        chieu_cao = 181;
+        theo_nghanh = "IT\n";
+    }
+    private {
+        tai_san = 15000;
+        dia_chi = "69 Dery, Ohio\n";
+    }
+}
+
+define hello() {
+    msg "hello world!!!\n";
+}
+
+define fact(n) {
+    if (n <= 1) { return 1; }
+    return n * fact(n - 1);
+}
+
+define fib(n) {
+    if (n < 2) { return n; }
+    return fib(n - 1) + fib(n - 2);
+}
+
+entry {
+    hello();
+    if (hp > 75) {msg "ổn\n", green;}
+    else if (hp > 1 and hp < 75) {msg "cẩn thận\n", yellow;}
+    else {msg "thua\n";}
+
+    while (i < 5) {
+        i = i + 1;
+        total = total + i;
+        msg i"\n";
+    }
+    msg "total=" + total + "\n";
+
+    while () {
+        i = i + 1;
+        if (i < 8) { continue; }
+        if (i == 10) {
+            msg "i = 10\n";
+            break;
+        }
+    }
+
+    msg "fact(12)=" + fact(12) + "\n";
+    msg "fact(25)=" + fact(25) + "\n";
+    msg "fib(20)=" + fib(20) + "\n";
+
+    msg Mike.tuoi"\n";
+    msg Mike.theo_nghanh;
+    Mike.tai_san = 15000^2;
+    msg Mike.tai_san;
+    msg "\n";
+    msg Mike.dia_chi;
+
+    drive(a).add("chanh", 4);
+    msg a; msg "\n";
+    drive(a).rm("táo");
+    msg a; msg "\n";
+    drive(a).rm(1);
+    msg a; msg "\n";
+    drive(a).add("nho", 1);
+    msg a; msg "\n";
+    msg a[1] + "-" + a[3] + "\n";
+    a[2] = "đu đủ";
+    msg a; msg "\n";
+    msg len "xin chào" ; msg "\n";
+
+    k = 0;
+    r = 0;
+    while (k < 1000) {
+        x = random(1 to 6);
+        if (x < 1 or x > 6) { msg "random sai\n"; }
+        r = r + x;
+        k = k + 1;
+    }
+    if (r > 2500 and r < 4500) { msg "random ok\n"; }
+    msg "exit tiếp\n";
+    exit;
+    msg "không bao giờ in\n";
+}

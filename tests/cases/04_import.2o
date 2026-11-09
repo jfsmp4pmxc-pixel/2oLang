@@ -1,0 +1,9 @@
+// #import: thư viện tự viết
+#import "lib/maths.2o"
+
+global {}
+var {}
+entry {
+    msg "binh_phuong(12)=" + binh_phuong(12) + "\n";
+    msg "lon_nhat(3, 9)=" + lon_nhat(3, 9) + "\n";
+}
