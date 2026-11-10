@@ -31,7 +31,7 @@ Cần `g++` hỗ trợ C++17 và `make`. CI (`.github/workflows/build.yml`) buil
 
 ## Ngôn ngữ
 
-Mỗi chương trình **bắt buộc** có ba khối theo thứ tự tuỳ ý: `global { }`, `var { }`, `entry { }`.
+**File được biên dịch** (file chính) **bắt buộc** có ba khối theo thứ tự tuỳ ý: `global { }`, `var { }`, `entry { }`. File được `#import` thì không bắt buộc khối nào, thường chỉ cần `var { }` kèm các `define`.
 
 ```
 global {          // biến toàn cục: KHÔNG dùng db
@@ -53,7 +53,7 @@ entry {           // điểm bắt đầu; trong hàm/entry bỏ cả db và ki�
 
 - `nil` là không có giá trị. `true`/`false` là giá trị logic.
 - Dấu `;` có thể bỏ khi câu lệnh kết thúc bằng xuống dòng.
-- Gán vào tên chưa khai báo trong hàm/entry sẽ tạo biến cục bộ; tên trùng `var`/`global` thì gán vào biến đó.
+- Gán vào tên chưa khai báo trong hàm/entry sẽ tạo biến cục bộ; nếu tên đã có (xem thứ tự tìm biến ở mục *Liên kết*) thì gán vào biến đó. Vì vậy `a = a + 1;` trong entry cộng thêm 1 vào biến `a` đã khai báo.
 - Chú thích: `// ...` và `/* ... */`.
 
 ### Toán tử
@@ -115,6 +115,7 @@ Chỉ số của drive và chuỗi **tính từ 1**, cho thống nhất với `a
 ```
 if (input "help") { ... }     // đọc một dòng, ra true nếu đúng là "help"
 ten = input;                  // đọc một dòng, trả về chuỗi
+input = ten;                  // cách viết khác của dòng trên: đọc một dòng vào ten
 if (input alt + f4) { ... }   // chờ một phím/tổ hợp phím, ra true nếu khớp
 ```
 
@@ -128,7 +129,9 @@ Phím hỗ trợ: chữ cái, số, `enter esc tab space backspace delete home e
 #import "scr/shell.2o"
 ```
 
-File được import chỉ cần chứa `define`, `obj`, `global`, `var`; `entry` của nó bị bỏ qua. `var` của mỗi file là riêng của file đó, `global`, hàm và `obj` dùng chung.
+Chỉ file được biên dịch mới cần `entry`; file được import có thể chỉ có `var` và `define` (khối `entry` trong file import, nếu có, bị bỏ qua). Hàm, `obj` và `global` dùng chung cho mọi file.
+
+**Thứ tự tìm biến** khi gặp một tên: biến cục bộ/tham số, rồi `var` của chính file đang chạy, rồi `global`, cuối cùng là `var` của các file mà nó `#import` (trực tiếp hoặc gián tiếp). Ví dụ entry gọi hàm `tang()` nằm trong file import, rồi dùng biến `dem` không có ở file chính: tìm thấy `dem` trong `var` của file import. Nếu hai file import cùng khai báo một tên thì báo lỗi "mơ hồ" (đổi tên một trong hai, hoặc khai báo tên đó ở file chính). Hàm trong file import chỉ thấy biến của chính nó và của các file nó import, không thấy biến của file chính.
 
 ## Báo lỗi
 

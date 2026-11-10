@@ -58,6 +58,8 @@ struct Gen {
     std::map<std::string, FnInfo> fns;
     std::map<std::string, ObjInfo> objs;
     std::map<std::string, uint32_t> vars;  // "g:ten" hoặc "<mod>:ten"
+    std::map<int, std::vector<int>> deps;   // module -> các module nó #import
+    std::map<int, std::string> modPath;     // module -> đường dẫn file
     std::map<std::string, uint32_t> strPool, cstrPool;
     std::map<uint64_t, uint32_t> floatPool;
     Ctx cx;
@@ -75,7 +77,8 @@ struct Gen {
     // ---- hàm / biến ----
     int fnLabel(const std::string& name);
     void registerFn(const FuncDef& f, int mod, bool raw);
-    bool resolveVar(const std::string& name, int32_t& off, bool& local) const;
+    // 0: không thấy, 1: thấy, 2: mơ hồ (nhiều file import cùng khai báo tên đó; ambig = danh sách file)
+    int resolveVar(const std::string& name, int32_t& off, bool& local, std::string* ambig = nullptr) const;
     void loadVar(const Expr& e);
     void storeVar(const Expr& e);
     std::pair<uint32_t, bool> objField(const Expr& e, bool forWrite);

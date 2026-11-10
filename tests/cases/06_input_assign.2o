@@ -1,0 +1,11 @@
+// input = a;  đọc một dòng vào a (giống a = input;)
+global {}
+var { db string a = "cũ"; db string b = ""; }
+entry {
+    input = a;
+    msg "a=" + a + "\n";
+    b = input;
+    msg "b=" + b + "\n";
+    input = a;
+    msg "a=" + a + " (dòng cuối)\n";
+}

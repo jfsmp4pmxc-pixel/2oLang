@@ -1,0 +1,9 @@
+// ERROR: biến 'x' mơ hồ
+// ERROR: lib/dup_a.2o
+// ERROR: lib/dup_b.2o
+// COUNT: 1
+#import "lib/dup_a.2o"
+#import "lib/dup_b.2o"
+global {}
+var {}
+entry { msg x; }

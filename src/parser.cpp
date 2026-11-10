@@ -492,6 +492,18 @@ struct Parser {
                 if (cur().kind == T::Ident && kTypes.count(cur().text) && peekTok().kind == T::Ident) next();
                 // phần còn lại được đọc như một phép gán bình thường
             }
+            if (w == "input" && isOpAt(1, "=")) {  // input = a;  ->  đọc một dòng vào a (như a = input;)
+                next();
+                next();
+                auto target = parseExpr();
+                if (target->k != EK::Var && target->k != EK::Field && target->k != EK::Index)
+                    fail(target->pos, "sau 'input =' phải là biến, trường đối tượng hoặc phần tử drive (ví dụ: input = a;)");
+                auto s = mkS(SK::Assign, ps);
+                s->target = std::move(target);
+                s->e = mk(EK::Input, ps);
+                endStmt();
+                return s;
+            }
             if (w == "msg") {
                 next();
                 auto s = mkS(SK::Msg, ps);

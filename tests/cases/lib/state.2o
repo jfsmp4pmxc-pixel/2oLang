@@ -1,0 +1,14 @@
+// file được import: chỉ cần var (không cần global, không cần entry)
+var {
+    db int dem = 10;
+    db string ten = "lib";
+    db drive ds = "a", "b";
+}
+
+define tang() {
+    dem = dem + 1;
+}
+
+define in_dem() {
+    msg "lib thấy dem=" + dem + "\n";
+}

@@ -120,6 +120,7 @@ struct Module {
     std::vector<ObjDef> objs;
     Block entry;
     std::vector<ImportDecl> imports;
+    std::vector<int> depIds;  // id các module mà file này #import (Loader điền)
 };
 
 // isRuntime = true: cho phép cú pháp mức thấp của runtime và không bắt buộc global/var/entry

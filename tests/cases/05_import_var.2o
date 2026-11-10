@@ -1,0 +1,19 @@
+// biến của file import dùng được trong entry của file chính
+#import "lib/state.2o"
+
+global {}
+var { db int rieng = 100; }
+
+entry {
+    dem = dem + 1;                    // tìm thấy trong file import
+    msg "main thấy dem=" + dem + "\n";
+    tang();
+    in_dem();
+    rieng = rieng + dem;
+    msg "rieng=" + rieng + "\n";
+    drive(ds).add("c");
+    msg ds; msg " " + ten + "\n";
+    moi = 5;                          // chưa khai báo ở đâu cả: biến cục bộ mới
+    moi = moi + 1;
+    msg "moi=" + moi + "\n";
+}

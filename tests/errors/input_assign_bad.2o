@@ -1,0 +1,5 @@
+// ERROR: sau 'input =' phải là biến
+// COUNT: 1
+global {}
+var { db int a = 1; }
+entry { input = a + 1; }

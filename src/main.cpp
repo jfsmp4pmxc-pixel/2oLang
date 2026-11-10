@@ -88,7 +88,8 @@ static int reportAll() {
 struct Loader {
     std::vector<std::unique_ptr<Module>> owned;
     std::vector<Module*> order;  // phụ thuộc trước, module chính cuối
-    std::set<std::string> done, stack;
+    std::set<std::string> stack;
+    std::map<std::string, Module*> byKey;  // file đã nạp (một file chỉ nạp một lần)
 
     Module* load(const std::string& path, const Pos& from, bool isMain) {
         std::string key = canon(path);
@@ -96,7 +97,8 @@ struct Loader {
             reportError(CompileError(from, "#import vòng tròn: " + path));
             return nullptr;
         }
-        if (done.count(key)) return nullptr;
+        auto loaded = byKey.find(key);
+        if (loaded != byKey.end()) return loaded->second;
         std::string src;
         if (!readFile(path, src)) {
             if (isMain) throw std::runtime_error("không đọc được file: " + path);
@@ -117,11 +119,12 @@ struct Loader {
             std::string tmp;
             if (!p.empty() && p[0] != '/' && !readFile(cand, tmp)) cand = p;  // thử thêm theo thư mục hiện tại
             else if (!p.empty() && p[0] == '/') cand = p;
-            load(cand, imp.pos, false);
+            Module* child = load(cand, imp.pos, false);
+            if (child && std::find(m->depIds.begin(), m->depIds.end(), child->id) == m->depIds.end()) m->depIds.push_back(child->id);
         }
         stack.erase(key);
-        done.insert(key);
         Module* raw = m.get();
+        byKey[key] = raw;
         owned.push_back(std::move(m));
         order.push_back(raw);
         return raw;

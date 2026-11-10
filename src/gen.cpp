@@ -86,25 +86,56 @@ void Gen::registerFn(const FuncDef& f, int mod, bool raw) {
     fi.pos = f.pos;
 }
 
-bool Gen::resolveVar(const std::string& name, int32_t& off, bool& local) const {
+// Thứ tự tìm: biến cục bộ/tham số -> var của chính file -> global -> var của các file được #import.
+int Gen::resolveVar(const std::string& name, int32_t& off, bool& local, std::string* ambig) const {
     auto it = cx.slots.find(name);
     if (it != cx.slots.end()) {
         off = it->second;
         local = true;
-        return true;
+        return 1;
     }
+    local = false;
     auto v = vars.find(std::to_string(cx.mod) + ":" + name);
     if (v == vars.end()) v = vars.find("g:" + name);
-    if (v == vars.end()) return false;
-    off = (int32_t)v->second;
-    local = false;
-    return true;
+    if (v != vars.end()) {
+        off = (int32_t)v->second;
+        return 1;
+    }
+    // chưa thấy: tìm trong các file import (trực tiếp rồi gián tiếp)
+    std::vector<int> queue{cx.mod};
+    std::set<int> seen{cx.mod};
+    std::vector<std::pair<int, uint32_t>> found;
+    for (size_t qi = 0; qi < queue.size(); qi++) {
+        auto d = deps.find(queue[qi]);
+        if (d == deps.end()) continue;
+        for (int c : d->second) {
+            if (!seen.insert(c).second) continue;
+            queue.push_back(c);
+            auto cv = vars.find(std::to_string(c) + ":" + name);
+            if (cv != vars.end()) found.push_back({c, cv->second});
+        }
+    }
+    if (found.empty()) return 0;
+    if (found.size() > 1) {
+        if (ambig) {
+            for (auto& f : found) {
+                auto p = modPath.find(f.first);
+                *ambig += (ambig->empty() ? "" : ", ") + (p != modPath.end() ? p->second : std::to_string(f.first));
+            }
+        }
+        return 2;
+    }
+    off = (int32_t)found[0].second;
+    return 1;
 }
 
 void Gen::loadVar(const Expr& e) {
     int32_t off;
     bool local;
-    if (!resolveVar(e.s, off, local)) {
+    std::string amb;
+    int found = resolveVar(e.s, off, local, &amb);
+    if (found == 2) fail(e.pos, "biến '" + e.s + "' mơ hồ: được khai báo trong nhiều file import (" + amb + "); hãy đổi tên một trong số đó");
+    if (!found) {
         if (objs.count(e.s)) fail(e.pos, "'" + e.s + "' là đối tượng, hãy truy xuất trường: " + e.s + ".ten_truong");
         fail(e.pos, "biến '" + e.s + "' chưa được khai báo");
     }
@@ -119,7 +150,10 @@ void Gen::loadVar(const Expr& e) {
 void Gen::storeVar(const Expr& e) {  // giá trị đang ở eax
     int32_t off;
     bool local;
-    if (!resolveVar(e.s, off, local)) fail(e.pos, "biến '" + e.s + "' chưa được khai báo");
+    std::string amb;
+    int found = resolveVar(e.s, off, local, &amb);
+    if (found == 2) fail(e.pos, "biến '" + e.s + "' mơ hồ: được khai báo trong nhiều file import (" + amb + "); hãy đổi tên một trong số đó");
+    if (!found) fail(e.pos, "biến '" + e.s + "' chưa được khai báo");
     if (local) {
         as.store(EBP, off, EAX);
     } else {
@@ -428,6 +462,8 @@ std::vector<uint8_t> generate(const Target& t, Module& rt, std::vector<Module*>&
 
     for (auto& f : rt.funcs) g.registerFn(f, -1, true);
     for (Module* m : mods) {
+        g.deps[m->id] = m->depIds;
+        g.modPath[m->id] = m->path;
         for (auto& f : m->funcs) guarded([&] { g.registerFn(f, m->id, false); });
         for (auto& d : m->globals) {
             std::string k = "g:" + d->name;
