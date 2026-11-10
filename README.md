@@ -2,7 +2,7 @@
 
 Trình biên dịch cho ngôn ngữ lập trình **2oLang**: đọc file `.2o` và **sinh thẳng mã máy** (không qua C, assembler hay linker ngoài, không cần libc). Trình biên dịch viết bằng C++17.
 
-```-ash
+```Bash
 ./2oLang <file đầu vào> '-(<mục tiêu>)->' <file đầu ra>
 ```
 
