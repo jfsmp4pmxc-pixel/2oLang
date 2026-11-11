@@ -6,7 +6,9 @@
 
 // 2oLang compiler - chương trình chính
 //   ./2oLang <file.2o> '-(<mục tiêu>)->' <file đầu ra>
+#include <dirent.h>
 #include <sys/stat.h>
+#include <unistd.h>
 
 #include <algorithm>
 #include <cstdio>
@@ -165,6 +167,116 @@ struct Loader {
     }
 };
 
+// ---------------- lệnh `2oLang lib [update]` ----------------
+static const char* kLibRepo = "https://github.com/Twoo-Studio/2oLang_Objs";
+static const char* kLibRepoTar = "https://codeload.github.com/Twoo-Studio/2oLang_Objs/tar.gz/refs/heads/main";
+
+// Thư mục thư viện của người dùng: $TWOO_HOME/lib hoặc ~/.2oLang/lib
+static std::string userLibDir() {
+    if (const char* h = getenv("TWOO_HOME")) return std::string(h) + "/lib";
+    if (const char* h = getenv("HOME")) return std::string(h) + "/.2oLang/lib";
+    return "";
+}
+
+static std::string shq(const std::string& s) {  // bọc trong nháy đơn cho shell
+    std::string r = "'";
+    for (char c : s) { if (c == '\'') r += "'\\''"; else r += c; }
+    return r + "'";
+}
+
+static bool mkdirs(const std::string& p) {
+    std::string cur;
+    for (size_t i = 0; i <= p.size(); i++) {
+        if (i == p.size() || p[i] == '/') {
+            if (!cur.empty()) mkdir(cur.c_str(), 0755);
+        }
+        if (i < p.size()) cur += p[i];
+    }
+    struct stat st;
+    return stat(p.c_str(), &st) == 0 && S_ISDIR(st.st_mode);
+}
+
+static std::vector<std::string> listLibFiles(const std::string& dir) {  // tên (không có .2o), đã sắp xếp
+    std::vector<std::string> v;
+    if (DIR* d = opendir(dir.c_str())) {
+        while (dirent* e = readdir(d)) {
+            std::string n = e->d_name;
+            if (n.size() > 3 && n.compare(n.size() - 3, 3, ".2o") == 0) v.push_back(n.substr(0, n.size() - 3));
+        }
+        closedir(d);
+    }
+    std::sort(v.begin(), v.end());
+    return v;
+}
+
+static int sh(const std::string& c) { return system(c.c_str()); }
+static bool haveCmd(const char* c) { return system((std::string("command -v ") + c + " >/dev/null 2>&1").c_str()) == 0; }
+
+static int libList() {
+    std::string ud = userLibDir();
+    std::cout << "Thư viện chuẩn (dùng: #import <Tên>)\n";
+    std::set<std::string> shown;
+    auto extra = g_libDirs;
+    if (!ud.empty()) extra.push_back(ud);
+    for (auto& d : extra)
+        for (auto& n : listLibFiles(d))
+            if (shown.insert(n).second) std::cout << "  " << n << "   [" << d << "/" << n << ".2o]\n";
+    for (auto& l : embeddedLibs())
+        if (shown.insert(l.name).second) std::cout << "  " << l.name << "   [nhúng sẵn]\n";
+    if (shown.empty()) std::cout << "  (chưa có thư viện nào)\n";
+    std::cout << "\nCập nhật từ " << kLibRepo << ": ./2oLang lib update\n";
+    if (!ud.empty()) std::cout << "Thư mục cài đặt: " << ud << "\n";
+    return 0;
+}
+
+static int libUpdate() {
+    std::string ud = userLibDir();
+    if (ud.empty()) { std::cerr << "lỗi: không xác định được thư mục cài đặt (đặt HOME hoặc TWOO_HOME)\n"; return 1; }
+    if (!mkdirs(ud)) { std::cerr << "lỗi: không tạo được thư mục " << ud << "\n"; return 1; }
+    char tmpl[] = "/tmp/2olang-lib-XXXXXX";
+    if (!mkdtemp(tmpl)) { std::cerr << "lỗi: không tạo được thư mục tạm\n"; return 1; }
+    std::string tmp = tmpl, src;
+    std::cout << "Đang tải thư viện từ " << kLibRepo << " ...\n";
+    bool ok = false;
+    if (haveCmd("git")) {
+        ok = system(("git clone --depth 1 -q " + shq(kLibRepo) + " " + shq(tmp + "/r") + " >/dev/null 2>&1").c_str()) == 0;
+        src = tmp + "/r/Lib";
+    }
+    if (!ok) {
+        std::string get;
+        if (haveCmd("curl")) get = "curl -fsSL " + shq(kLibRepoTar) + " -o " + shq(tmp + "/a.tgz");
+        else if (haveCmd("wget")) get = "wget -q -O " + shq(tmp + "/a.tgz") + " " + shq(kLibRepoTar);
+        if (get.empty()) {
+            std::cerr << "lỗi: cần một trong các lệnh: git, curl, wget\n";
+            sh("rm -rf " + shq(tmp));
+            return 1;
+        }
+        ok = system((get + " 2>/dev/null && mkdir " + shq(tmp + "/x") + " && tar -xzf " + shq(tmp + "/a.tgz") + " -C " + shq(tmp + "/x") + " --strip-components=1").c_str()) == 0;
+        src = tmp + "/x/Lib";
+    }
+    if (!ok) {
+        std::cerr << "lỗi: không tải được thư viện (kiểm tra kết nối mạng)\n";
+        sh("rm -rf " + shq(tmp));
+        return 1;
+    }
+    int added = 0, updated = 0, same = 0;
+    for (auto& n : listLibFiles(src)) {
+        std::string from, old;
+        readFile(src + "/" + n + ".2o", from);
+        std::string dst = ud + "/" + n + ".2o";
+        bool had = readFile(dst, old);
+        if (had && old == from) { same++; std::cout << "  = " << n << " (không đổi)\n"; continue; }
+        std::ofstream o(dst, std::ios::binary | std::ios::trunc);
+        if (!o) { std::cerr << "lỗi: không ghi được " << dst << "\n"; continue; }
+        o << from;
+        std::cout << (had ? "  ~ " : "  + ") << n << (had ? " (đã cập nhật)\n" : " (mới)\n");
+        (had ? updated : added)++;
+    }
+    sh("rm -rf " + shq(tmp));
+    std::cout << "Xong: " << added << " mới, " << updated << " cập nhật, " << same << " không đổi -> " << ud << "\n";
+    return 0;
+}
+
 static void usage() {
     std::cout << kVersion << " - trình biên dịch 2oLang (.2o -> mã máy)\n\n"
               << "Cú pháp:\n"
@@ -176,11 +288,20 @@ static void usage() {
               << "  i386 / x86_64               : mã máy thô (flat binary, dùng syscall Linux)\n\n"
               << "Lưu ý: trong shell hãy đặt '-(...)->' trong dấu nháy vì ( ) và > có nghĩa đặc biệt.\n"
               << "Tuỳ chọn: --org <địa chỉ> (địa chỉ nạp của mã máy thô), --list-targets, --list-libs, -L <thư mục thư viện>, --version, -h\n"
-              << "Thư viện chuẩn: #import <CioStyle>  (tìm trong -L, biến TWOO_LIB, rồi thư viện nhúng sẵn)\n";
+              << "Thư viện chuẩn: #import <CioStyle>  (tìm trong -L, TWOO_LIB, ~/.2oLang/lib rồi thư viện nhúng sẵn)\n"
+              << "Quản lý thư viện: 2oLang lib (liệt kê), 2oLang lib update (tải/cập nhật)\n";
 }
 
 int main(int argc, char** argv) {
-    std::string input, output, targetName;
+    if (argc >= 2 && std::string(argv[1]) == "lib") {
+        const char* env = getenv("TWOO_LIB");
+        if (env) { std::stringstream ss(env); std::string d; while (std::getline(ss, d, ':')) if (!d.empty()) g_libDirs.push_back(d); }
+        if (argc == 2) return libList();
+        if (std::string(argv[2]) == "update" && argc == 3) return libUpdate();
+        std::cerr << "dùng: 2oLang lib            (liệt kê thư viện)\n      2oLang lib update     (tải/cập nhật thư viện)\n";
+        return 2;
+    }
+    std::string input, output, targetName, userDirPending;
     bool haveOrg = false;
     uint64_t org = 0;
     std::vector<std::string> pos;
@@ -215,6 +336,10 @@ int main(int argc, char** argv) {
         return 2;
     }
     if (input.empty()) { usage(); return 2; }
+    {
+        std::string ud = userLibDir();
+        if (!ud.empty()) userDirPending = ud;
+    }
     if (const char* env = getenv("TWOO_LIB")) {
         std::stringstream ss(env);
         std::string d;
@@ -235,6 +360,7 @@ int main(int argc, char** argv) {
         if (tg.fmt == Fmt::FLAT) output += ".bin";
     }
 
+    if (!userDirPending.empty()) g_libDirs.push_back(userDirPending);  // sau -L và TWOO_LIB, trước thư viện nhúng
     try {
         // runtime
         std::string rtSrc = runtimeSource();

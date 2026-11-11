@@ -184,8 +184,11 @@ entry {
 |---|---|
 | `CioStyle` | `printf(s)` - in chuỗi `s` ra màn hình |
 
-- `./2oLang --list-libs` liệt kê thư viện có sẵn.
-- Thứ tự tìm `#import <Tên>`: thư mục `-L <thư mục>` (lặp được) -> biến môi trường `TWOO_LIB` (cách nhau bằng `:`) -> thư viện nhúng sẵn.
+- `./2oLang lib` liệt kê thư viện (nguồn: thư mục cài đặt hay nhúng sẵn).
+- `./2oLang lib update` tải/cập nhật thư viện mới nhất từ [2oLang_Objs](https://github.com/Twoo-Studio/2oLang_Objs)
+  vào `~/.2oLang/lib` (hoặc `$TWOO_HOME/lib`) - **không cần build lại** 2oLang. Cần `git`, hoặc `curl`/`wget` + `tar`.
+- `./2oLang --list-libs` chỉ in tên các thư viện nhúng sẵn.
+- Thứ tự tìm `#import <Tên>`: `-L <thư mục>` (lặp được) -> biến môi trường `TWOO_LIB` (cách nhau bằng `:`) -> `~/.2oLang/lib` (do `lib update`) -> thư viện nhúng sẵn.
   Nhờ vậy bạn có thể ghi đè hoặc thêm thư viện riêng mà không cần build lại.
 - Thêm thư viện chuẩn mới: bỏ file `Tên.2o` vào `Lib/` rồi `make` (tự nhúng lại).
 - `#import "đường/dẫn.2o"` vẫn dùng như cũ cho file của riêng bạn.
