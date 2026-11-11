@@ -1,0 +1,14 @@
+// chạy trong terminal giả: kiểm tra system.* và màu khi stdout là terminal
+global {}
+var {}
+entry {
+    msg "dong 1\n", green;
+    system.console.save
+    msg "pos=" + system.cursor.pos + "\n";
+    msg "size=" + system.console.size + "\n";
+    system.cursor.move(2, 5)
+    system.cursor.hide
+    system.cursor.show
+    system.console.clear
+    system.console.load
+}

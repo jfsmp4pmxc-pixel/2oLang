@@ -1,0 +1,15 @@
+// input str;  đọc một dòng (kết thúc khi gặp enter) vào str, rồi sẵn sàng cho lần nhập tiếp theo
+global {}
+var { db string str = ""; }
+entry {
+    while () {
+        input str;
+        if (str == nil) { msg "hết dữ liệu\n"; break; }
+        if (str == "xong") { msg "kết thúc\n"; break; }
+        msg "bạn nhập: " + str + "\n";
+    }
+    input str;
+    msg "dòng sau cùng: " + str + "\n";
+    input str;                         // hết dữ liệu: str thành nil
+    if (str == nil) { msg "EOF\n"; }
+}

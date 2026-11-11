@@ -1,0 +1,18 @@
+// system.*: khi không chạy trong terminal thì không in mã điều khiển; pos và size trả 0
+global {}
+var {}
+entry {
+    msg "A\n";
+    system.console.save
+    msg "B\n";
+    system.console.load                // in lại bản đã lưu: A
+    system.console.clear               // dọn console (và nhật ký)
+    system.console.load                // bản đã lưu vẫn còn: A
+    msg "pos=" + system.cursor.pos + " size=" + system.console.size + "\n";
+    msg system.cursor.pos.y; msg " "; msg system.cursor.pos.x; msg "\n";
+    msg system.console.size.y; msg "x"; msg system.console.size.x; msg "\n";
+    system.cursor.move(3, 4)
+    system.cursor.hide
+    system.cursor.show
+    msg "xong\n";
+}

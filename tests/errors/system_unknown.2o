@@ -1,0 +1,6 @@
+// ERROR: lệnh hệ thống không tồn tại: system.console.xoa
+// ERROR: hiện có: system.console.clear
+// COUNT: 1
+global {}
+var {}
+entry { system.console.xoa }

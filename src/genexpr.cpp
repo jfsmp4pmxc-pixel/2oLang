@@ -114,9 +114,10 @@ bool Gen::evalIntrinsic(const Expr& e) {
                        mac ? 24 : 12,              // 3: offset c_lflag
                        mac ? 48 : 23,              // 4: offset c_cc[VMIN]
                        mac ? 49 : 22,              // 5: offset c_cc[VTIME]
-                       mac ? 0x300 : 0x500};       // 6: ICRNL | IXON (c_iflag, offset 0)
+                       mac ? 0x300 : 0x500,        // 6: ICRNL | IXON (c_iflag, offset 0)
+                       mac ? 0x40087468 : 0x5413};  // 7: TIOCGWINSZ (lấy kích thước cửa sổ)
         int k = (int)e.a[0]->i;
-        if (k < 0 || k > 6) fail(e.pos, "rt_const: mã không hợp lệ");
+        if (k < 0 || k > 7) fail(e.pos, "rt_const: mã không hợp lệ");
         as.movRI(EAX, v[k]);
     } else if (n == "rt_and" || n == "rt_or" || n == "rt_xor" || n == "rt_shl" || n == "rt_shr") {
         argc(2);
@@ -324,6 +325,32 @@ void Gen::eval(const Expr& e) {
             if (e.a.empty()) callRt("rt_input_line", 0);
             else callRtWith("rt_input_match", {e.a[0].get()});
             return;
+        case EK::Sys: {
+            const std::string& sp = e.s;
+            // đối số "which" kiểu số nguyên gắn thẻ: 1 = cả cặp [y, x], 3 = y, 5 = x
+            auto which = [&](const std::string& base) -> int64_t {
+                if (sp == base) return 1;
+                return sp == base + ".y" ? 3 : 5;
+            };
+            if (sp == "console.clear") callRt("rt_con_clear", 0);
+            else if (sp == "console.save") callRt("rt_con_save", 0);
+            else if (sp == "console.load") callRt("rt_con_load", 0);
+            else if (sp.rfind("console.size", 0) == 0) {
+                as.movRI(EAX, which("console.size"));
+                as.push(EAX);
+                callRt("rt_con_size", 1);
+            } else if (sp.rfind("cursor.pos", 0) == 0) {
+                as.movRI(EAX, which("cursor.pos"));
+                as.push(EAX);
+                callRt("rt_cur_pos", 1);
+            } else if (sp == "cursor.move") callRtWith("rt_cur_move", {e.a[0].get(), e.a[1].get()});
+            else if (sp == "cursor.hide" || sp == "cursor.show") {
+                as.movRI(EAX, sp == "cursor.show" ? 3 : 1);
+                as.push(EAX);
+                callRt("rt_cur_show", 1);
+            }
+            return;
+        }
         case EK::Chord:
             as.leaData(EAX, strObj(e.s));
             as.push(EAX);

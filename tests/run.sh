@@ -53,5 +53,16 @@ for src in tests/errors/*.2o; do
   else ok "$name"; fi
 done
 
+echo "== terminal giả (pty): system.*, màu"
+if command -v python3 >/dev/null 2>&1; then
+  ptyout=$(python3 tests/pty/run_pty.py "$C" 2>&1); ptycode=$?
+  echo "$ptyout" | grep -E "^  (ok|FAIL)"
+  pass=$((pass + $(echo "$ptyout" | grep -c "^  ok")))
+  fail=$((fail + $(echo "$ptyout" | grep -c "^  FAIL")))
+  if [ $ptycode != 0 ] && ! echo "$ptyout" | grep -q "^  FAIL"; then bad "pty: $(echo "$ptyout" | tail -1)"; fi
+else
+  echo "  (bỏ qua: máy không có python3)"
+fi
+
 echo; echo "đạt: $pass, hỏng: $fail"
 [ "$fail" = 0 ]

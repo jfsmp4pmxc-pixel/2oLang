@@ -47,7 +47,7 @@ struct Token {
 std::vector<Token> lex(const std::string& src, int fileId);
 
 // ---------------- AST ----------------
-enum class EK { Int, Float, Str, Nil, Bool, Var, Field, Index, Call, Method, Unary, Binary, Random, Input, Chord, List };
+enum class EK { Int, Float, Str, Nil, Bool, Var, Field, Index, Call, Method, Unary, Binary, Random, Input, Chord, List, Sys };
 
 struct Expr;
 using ExprP = std::unique_ptr<Expr>;

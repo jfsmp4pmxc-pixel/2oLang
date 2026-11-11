@@ -364,13 +364,13 @@ define rt_msg(v, c) {
     col = 0
     if (c != 1) { col = rt_isatty() }
     if (col == 1) {
-        rt_write(1, "\x1b[", 2)
+        rt_out("\x1b[", 2)
         n = rt_itoa((c - 1) / 2)
-        rt_write(1, rt_sdata(n), rt_slen(n))
-        rt_write(1, "m", 1)
+        rt_out(rt_sdata(n), rt_slen(n))
+        rt_out("m", 1)
     }
-    rt_write(1, rt_sdata(s), rt_slen(s))
-    if (col == 1) { rt_write(1, "\x1b[0m", 4) }
+    rt_out(rt_sdata(s), rt_slen(s))
+    if (col == 1) { rt_out("\x1b[0m", 4) }
     return 0
 }
 
@@ -378,14 +378,17 @@ define rt_input_line() {
     buf = rt_alloc(4096)
     n = 0
     going = 1
+    any = 0
     while (going == 1 and n < 4095) {
         r = rt_sys(rt_sysno(0), 0, buf + n, 1)
         if (r <= 0) { going = 0 }
         else {
+            any = 1
             if (rt_load8(buf + n) == 10) { going = 0 }
             else { n = n + 1 }
         }
     }
+    if (any == 0) { return 0 }
     if (n > 0) {
         if (rt_load8(buf + n - 1) == 13) { n = n - 1 }
     }
@@ -472,5 +475,165 @@ define rt_random0() {
     rt_fop(2, rt_cell(9), rt_cell(9), rt_cell(12))
     rt_fop(3, rt_cell(10), rt_cell(8), rt_cell(9))
     return rt_mkf(rt_cell(10))
+}
+// ===== console: nhật ký đầu ra, lệnh system.* =====
+// Ô 4: con trỏ bộ đệm nhật ký (0 nếu chưa cấp), ô 5: số byte trong nhật ký, ô 6: bản lưu (chuỗi) hoặc 0,
+// ô 25/26: kết quả truy vấn vị trí con trỏ (y, x).
+// Mọi thứ chương trình in qua msg đều được ghi vào nhật ký; save/load làm việc trên nhật ký đó
+// (terminal không cho đọc lại nội dung màn hình).
+
+// ghi ra màn hình và ghi vào nhật ký (giữ tối đa 1 MB gần nhất)
+define rt_out(p, n) {
+    rt_write(1, p, n)
+    cap = 1048576
+    buf = rt_load(rt_cell(4))
+    if (buf == 0) {
+        buf = rt_alloc(cap)
+        rt_store(rt_cell(4), buf)
+        rt_store(rt_cell(5), 0)
+    }
+    if (n > cap / 2) {
+        skip = n - cap / 2
+        p = p + skip
+        n = n - skip
+    }
+    ln = rt_load(rt_cell(5))
+    if (ln + n > cap) {
+        drop = cap / 2
+        rt_memcpy(buf, buf + drop, ln - drop)
+        ln = ln - drop
+    }
+    rt_memcpy(buf + ln, p, n)
+    rt_store(rt_cell(5), ln + n)
+    return 0
+}
+
+define rt_con_clear() {
+    if (rt_isatty() == 1) { rt_write(1, "\x1b[H\x1b[2J\x1b[3J", 11) }
+    rt_store(rt_cell(5), 0)
+    return 0
+}
+
+define rt_con_save() {
+    n = rt_load(rt_cell(5))
+    s = rt_strnew(n)
+    if (n > 0) { rt_memcpy(rt_sdata(s), rt_load(rt_cell(4)), n) }
+    rt_store(rt_cell(6), s)
+    return 0
+}
+
+define rt_con_load() {
+    s = rt_load(rt_cell(6))
+    if (s != 0) { rt_out(rt_sdata(s), rt_slen(s)) }
+    return 0
+}
+
+// hỏi terminal vị trí con trỏ (ESC [ 6 n -> ESC [ y ; x R). Thành công: trả 1, y ở ô 25, x ở ô 26. Lỗi: trả 0, hai ô bằng 0
+define rt_cur_query() {
+    rt_store(rt_cell(25), 0)
+    rt_store(rt_cell(26), 0)
+    if (rt_isatty() != 1) { return 0 }
+    old = rt_alloc(128)
+    cur = rt_alloc(128)
+    got = rt_alloc(64)
+    if (rt_sys(rt_sysno(3), 0, rt_const(0), old) != 0) { return 0 }
+    rt_memcpy(cur, old, 128)
+    rt_store32(cur + rt_const(3), rt_and(rt_load32(cur + rt_const(3)), rt_xor(rt_const(2), 4294967295)))
+    rt_store32(cur, rt_and(rt_load32(cur), rt_xor(rt_const(6), 4294967295)))
+    rt_store8(cur + rt_const(4), 0)
+    rt_store8(cur + rt_const(5), 2)
+    rt_sys(rt_sysno(3), 0, rt_const(1), cur)
+    rt_write(1, "\x1b[6n", 4)
+    n = 0
+    going = 1
+    while (going == 1 and n < 60) {
+        r = rt_sys(rt_sysno(0), 0, got + n, 1)
+        if (r <= 0) { going = 0 }
+        else {
+            if (rt_load8(got + n) == 82) { going = 0 }
+            n = n + 1
+        }
+    }
+    rt_sys(rt_sysno(3), 0, rt_const(1), old)
+    if (n < 6) { return 0 }
+    if (rt_load8(got + n - 1) != 82) { return 0 }
+    i = 0
+    while (i < n and rt_load8(got + i) != 91) { i = i + 1 }
+    i = i + 1
+    y = 0
+    while (i < n and rt_load8(got + i) >= 48 and rt_load8(got + i) <= 57) {
+        y = y * 10 + rt_load8(got + i) - 48
+        i = i + 1
+    }
+    if (i >= n or rt_load8(got + i) != 59) { return 0 }
+    i = i + 1
+    x = 0
+    while (i < n and rt_load8(got + i) >= 48 and rt_load8(got + i) <= 57) {
+        x = x * 10 + rt_load8(got + i) - 48
+        i = i + 1
+    }
+    rt_store(rt_cell(25), y)
+    rt_store(rt_cell(26), x)
+    return 1
+}
+
+// w (số nguyên gắn thẻ): 1 = trả drive [y, x], 3 = trả y, 5 = trả x
+define rt_cur_pos(w) {
+    rt_cur_query()
+    y = rt_load(rt_cell(25))
+    x = rt_load(rt_cell(26))
+    if (w == 3) { return rt_mkint(y) }
+    if (w == 5) { return rt_mkint(x) }
+    d = rt_drive_new()
+    rt_drive_push(d, rt_mkint(y))
+    rt_drive_push(d, rt_mkint(x))
+    return d
+}
+
+// kích thước console: y = số dòng, x = số cột (0 nếu không phải terminal)
+define rt_con_size(w) {
+    buf = rt_alloc(16)
+    rt_store(buf, 0)
+    r = rt_sys(rt_sysno(3), 1, rt_const(7), buf)
+    if (r != 0) {
+        rt_store(buf, 0)
+        r = rt_sys(rt_sysno(3), 0, rt_const(7), buf)
+    }
+    y = 0
+    x = 0
+    if (r == 0) {
+        y = rt_load8(buf) + rt_load8(buf + 1) * 256
+        x = rt_load8(buf + 2) + rt_load8(buf + 3) * 256
+    }
+    if (w == 3) { return rt_mkint(y) }
+    if (w == 5) { return rt_mkint(x) }
+    d = rt_drive_new()
+    rt_drive_push(d, rt_mkint(y))
+    rt_drive_push(d, rt_mkint(x))
+    return d
+}
+
+// đặt con trỏ tới dòng y, cột x (tính từ 1)
+define rt_cur_move(y, x) {
+    if (rt_type(y) != 1 or rt_type(x) != 1) { rt_die("lỗi: system.cursor.move(y, x) cần hai số nguyên") }
+    if (rt_isatty() == 1) {
+        rt_write(1, "\x1b[", 2)
+        s = rt_itoa((y - 1) / 2)
+        rt_write(1, rt_sdata(s), rt_slen(s))
+        rt_write(1, ";", 1)
+        s = rt_itoa((x - 1) / 2)
+        rt_write(1, rt_sdata(s), rt_slen(s))
+        rt_write(1, "H", 1)
+    }
+    return 0
+}
+
+// f: 3 = hiện con trỏ, 1 = ẩn
+define rt_cur_show(f) {
+    if (rt_isatty() == 1) {
+        if (f == 3) { rt_write(1, "\x1b[?25h", 6) }
+        else { rt_write(1, "\x1b[?25l", 6) }
+    }
+    return 0
 }
 )2o"

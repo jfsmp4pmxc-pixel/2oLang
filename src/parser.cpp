@@ -5,6 +5,7 @@
 // Chương trình được phân phối với hy vọng hữu ích nhưng KHÔNG CÓ BẢO HÀNH NÀO.
 
 // 2oLang compiler - parser (đệ quy xuống)
+#include <map>
 #include <set>
 
 #include "common.hpp"
@@ -14,10 +15,16 @@ namespace {
 const std::set<std::string> kKeywords = {
     "global", "var", "entry", "db", "int", "float", "string", "drive", "define", "obj", "public", "private",
     "msg", "if", "else", "while", "break", "continue", "return", "exit", "and", "or", "not", "to", "true",
-    "false", "nil", "len", "element", "random", "input"};
+    "false", "nil", "len", "element", "random", "input", "system"};
 
 const std::set<std::string> kTypes = {"int", "float", "string", "drive"};
 const std::set<std::string> kColors = {"black", "red", "green", "yellow", "blue", "magenta", "cyan", "white", "gray"};
+
+// Lệnh hệ thống: đường dẫn sau "system." -> số tham số (viết trong ngoặc)
+const std::map<std::string, int> kSys = {
+    {"console.clear", 0}, {"console.save", 0}, {"console.load", 0}, {"console.size", 0}, {"console.size.y", 0},
+    {"console.size.x", 0}, {"cursor.pos", 0},  {"cursor.pos.y", 0}, {"cursor.pos.x", 0},  {"cursor.move", 2},
+    {"cursor.hide", 0},    {"cursor.show", 0}};
 
 // ---- dãy byte của phím tắt (input alt + f4, ...) ----
 const std::set<std::string> kKeyNames = {"enter", "esc", "tab", "space", "backspace", "delete", "home", "end",
@@ -357,6 +364,36 @@ struct Parser {
             if (!none) e->a.push_back(parseConcat());
             return e;
         }
+        if (w == "system") {  // system.console.clear, system.cursor.pos.y, system.cursor.move(y, x) ...
+            next();
+            std::string path;
+            while (isOp(".") && peekTok().kind == T::Ident) {
+                next();
+                path += (path.empty() ? "" : ".") + next().text;
+            }
+            auto it = kSys.find(path);
+            if (it == kSys.end()) {
+                std::string all;
+                for (auto& kv : kSys) all += (all.empty() ? "" : ", ") + std::string("system.") + kv.first;
+                fail(ps, "lệnh hệ thống không tồn tại: system" + (path.empty() ? "" : "." + path) + " (hiện có: " + all + ")");
+            }
+            auto e = mk(EK::Sys, ps);
+            e->s = path;
+            if (it->second == 0) {
+                if (isOp("(") && isOpAt(1, ")")) {  // cho phép viết system.console.clear()
+                    next();
+                    next();
+                }
+            } else {
+                expectOp("(");
+                for (int i = 0; i < it->second; i++) {
+                    if (i > 0) expectOp(",");
+                    e->a.push_back(parseExpr());
+                }
+                expectOp(")");
+            }
+            return e;
+        }
         if (w == "drive" && isOpAt(1, "(")) {  // drive(a).add(...)
             next();
             next();
@@ -503,6 +540,22 @@ struct Parser {
                 s->e = mk(EK::Input, ps);
                 endStmt();
                 return s;
+            }
+            if (w == "input" && peekTok().kind == T::Ident) {  // input str;  ->  đọc một dòng vào str
+                size_t save = p;
+                next();
+                if (!kKeywords.count(cur().text) && !chordAhead()) {
+                    auto target = parseExpr();
+                    bool endsHere = isOp(";") || isOp("}") || cur().nl || atEof();
+                    if (endsHere && (target->k == EK::Var || target->k == EK::Field || target->k == EK::Index)) {
+                        auto s = mkS(SK::Assign, ps);
+                        s->target = std::move(target);
+                        s->e = mk(EK::Input, ps);
+                        endStmt();
+                        return s;
+                    }
+                }
+                p = save;  // không phải dạng đọc vào biến (input "help", input alt + f4 ...): xử lý như cũ
             }
             if (w == "msg") {
                 next();
