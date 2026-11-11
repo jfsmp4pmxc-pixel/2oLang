@@ -23,6 +23,16 @@ std::string runtimeSource();
 
 static const char* kVersion = "2oLang 1.0";
 
+// Thư viện chuẩn nhúng sẵn (từ thư mục Lib/ lúc build)
+struct EmbLib { const char* name; std::vector<char> data; };
+static const std::vector<EmbLib>& embeddedLibs() {
+    static const std::vector<EmbLib> v = {
+#include "twolib_data.inc"
+    };
+    return v;
+}
+static std::vector<std::string> g_libDirs;  // -L và TWOO_LIB, theo thứ tự ưu tiên
+
 static std::map<int, std::string> g_src;       // id file -> nội dung (để in dòng lỗi)
 static std::map<int, std::string> g_names;     // id file -> đường dẫn
 
@@ -91,8 +101,26 @@ struct Loader {
     std::set<std::string> stack;
     std::map<std::string, Module*> byKey;  // file đã nạp (một file chỉ nạp một lần)
 
-    Module* load(const std::string& path, const Pos& from, bool isMain) {
-        std::string key = canon(path);
+    // #import <Tên>: tìm trong -L, TWOO_LIB rồi thư viện nhúng sẵn
+    Module* loadLib(const std::string& name, const Pos& from) {
+        for (auto& d : g_libDirs) {
+            std::string p = d + "/" + name + ".2o", tmp;
+            if (readFile(p, tmp)) return load(p, from, false);
+        }
+        for (auto& l : embeddedLibs())
+            if (name == l.name) {
+                std::string s(l.data.data());
+                return load("<Lib>/" + name + ".2o", from, false, &s);
+            }
+        std::string all;
+        for (auto& l : embeddedLibs()) all += (all.empty() ? "" : ", ") + std::string(l.name);
+        reportError(CompileError(from, "không tìm thấy thư viện <" + name + ">" + (all.empty() ? "" : ". Thư viện có sẵn: " + all)));
+        return nullptr;
+    }
+
+    Module* load(const std::string& path, const Pos& from, bool isMain, const std::string* embedded = nullptr) {
+        bool emb = embedded != nullptr;
+        std::string key = emb ? path : canon(path);
         if (stack.count(key)) {
             reportError(CompileError(from, "#import vòng tròn: " + path));
             return nullptr;
@@ -100,7 +128,8 @@ struct Loader {
         auto loaded = byKey.find(key);
         if (loaded != byKey.end()) return loaded->second;
         std::string src;
-        if (!readFile(path, src)) {
+        if (emb) src = *embedded;
+        else if (!readFile(path, src)) {
             if (isMain) throw std::runtime_error("không đọc được file: " + path);
             reportError(CompileError(from, "không tìm thấy file import: " + path));
             return nullptr;
@@ -114,6 +143,11 @@ struct Loader {
         m->id = id;
         m->path = path;
         for (auto& imp : m->imports) {
+            if (imp.lib) {
+                Module* child = loadLib(imp.path, imp.pos);
+                if (child && std::find(m->depIds.begin(), m->depIds.end(), child->id) == m->depIds.end()) m->depIds.push_back(child->id);
+                continue;
+            }
             std::string p = imp.path;
             std::string cand = dirOf(path) + "/" + p;
             std::string tmp;
@@ -141,7 +175,8 @@ static void usage() {
               << "  MacOS                       : Mach-O x86_64\n"
               << "  i386 / x86_64               : mã máy thô (flat binary, dùng syscall Linux)\n\n"
               << "Lưu ý: trong shell hãy đặt '-(...)->' trong dấu nháy vì ( ) và > có nghĩa đặc biệt.\n"
-              << "Tuỳ chọn: --org <địa chỉ> (địa chỉ nạp của mã máy thô), --list-targets, --version, -h\n";
+              << "Tuỳ chọn: --org <địa chỉ> (địa chỉ nạp của mã máy thô), --list-targets, --list-libs, -L <thư mục thư viện>, --version, -h\n"
+              << "Thư viện chuẩn: #import <CioStyle>  (tìm trong -L, biến TWOO_LIB, rồi thư viện nhúng sẵn)\n";
 }
 
 int main(int argc, char** argv) {
@@ -156,6 +191,12 @@ int main(int argc, char** argv) {
         if (a == "--list-targets") { std::cout << targetList() << "\n"; return 0; }
         if ((a == "-t" || a == "--target") && i + 1 < argc) { targetName = argv[++i]; continue; }
         if ((a == "-o" || a == "--output") && i + 1 < argc) { output = argv[++i]; continue; }
+        if (a == "--list-libs") {
+            for (auto& l : embeddedLibs()) std::cout << l.name << "\n";
+            return 0;
+        }
+        if (a == "-L" && i + 1 < argc) { g_libDirs.push_back(argv[++i]); continue; }
+        if (a.rfind("-L", 0) == 0 && a.size() > 2) { g_libDirs.push_back(a.substr(2)); continue; }
         if (a == "--org" && i + 1 < argc) { org = std::stoull(argv[++i], nullptr, 0); haveOrg = true; continue; }
         if (a.size() > 4 && a.rfind("-(", 0) == 0 && a.substr(a.size() - 3) == ")->") {
             targetName = a.substr(2, a.size() - 5);
@@ -174,6 +215,11 @@ int main(int argc, char** argv) {
         return 2;
     }
     if (input.empty()) { usage(); return 2; }
+    if (const char* env = getenv("TWOO_LIB")) {
+        std::stringstream ss(env);
+        std::string d;
+        while (std::getline(ss, d, ':')) if (!d.empty()) g_libDirs.push_back(d);
+    }
     if (targetName.empty()) targetName = "Alpine64bits";
     Target tg;
     if (!findTarget(targetName, tg)) {

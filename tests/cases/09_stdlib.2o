@@ -1,0 +1,9 @@
+// #import <Tên>: thư viện chuẩn nhúng sẵn (Lib/CioStyle.2o)
+#import <CioStyle>
+global {}
+var {}
+entry {
+    printf("xin chao\n");
+    printf("lan hai\n");
+    exit;
+}

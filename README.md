@@ -163,6 +163,33 @@ Chỉ file được biên dịch mới cần `entry`; file được import có t
 
 **Thứ tự tìm biến** khi gặp một tên: biến cục bộ/tham số, rồi `var` của chính file đang chạy, rồi `global`, cuối cùng là `var` của các file mà nó `#import` (trực tiếp hoặc gián tiếp). Ví dụ entry gọi hàm `tang()` nằm trong file import, rồi dùng biến `dem` không có ở file chính: tìm thấy `dem` trong `var` của file import. Nếu hai file import cùng khai báo một tên thì báo lỗi "mơ hồ" (đổi tên một trong hai, hoặc khai báo tên đó ở file chính). Hàm trong file import chỉ thấy biến của chính nó và của các file nó import, không thấy biến của file chính.
 
+## Thư viện chuẩn (`Lib/`)
+
+Giống `<iostream>` / `<stdio.h>` của C/C++: thư mục [`Lib/`](Lib) chứa các thư viện `.2o` (lấy từ
+[Twoo-Studio/2oLang_Objs](https://github.com/Twoo-Studio/2oLang_Objs)), được **nhúng thẳng vào trình biên dịch lúc build**
+nên dùng được ở mọi nơi mà không cần đi kèm file nào. Gọi bằng dấu `< >` thay vì đường dẫn:
+
+```
+#import <CioStyle>
+
+global {}
+var {}
+entry {
+    printf("xin chao\n");
+    exit;
+}
+```
+
+| Thư viện | Nội dung |
+|---|---|
+| `CioStyle` | `printf(s)` - in chuỗi `s` ra màn hình |
+
+- `./2oLang --list-libs` liệt kê thư viện có sẵn.
+- Thứ tự tìm `#import <Tên>`: thư mục `-L <thư mục>` (lặp được) -> biến môi trường `TWOO_LIB` (cách nhau bằng `:`) -> thư viện nhúng sẵn.
+  Nhờ vậy bạn có thể ghi đè hoặc thêm thư viện riêng mà không cần build lại.
+- Thêm thư viện chuẩn mới: bỏ file `Tên.2o` vào `Lib/` rồi `make` (tự nhúng lại).
+- `#import "đường/dẫn.2o"` vẫn dùng như cũ cho file của riêng bạn.
+
 ## Báo lỗi
 
 Trình biên dịch báo **toàn bộ lỗi trong một lần chạy** thay vì dừng ở lỗi đầu tiên. Mỗi lỗi có `file:dòng:cột`, dòng mã và dấu `^`, cuối cùng là tổng số lỗi; khi có lỗi thì không tạo file đầu ra.

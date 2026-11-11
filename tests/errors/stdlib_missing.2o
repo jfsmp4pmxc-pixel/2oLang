@@ -1,0 +1,5 @@
+// ERROR: không tìm thấy thư viện <NoSuchLib>
+#import <NoSuchLib>
+global {}
+var {}
+entry { exit; }

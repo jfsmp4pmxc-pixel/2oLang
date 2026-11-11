@@ -108,6 +108,7 @@ struct ObjDef {
 struct ImportDecl {
     Pos pos;
     std::string path;
+    bool lib = false;  // #import <Tên>: thư viện chuẩn
 };
 
 struct Module {

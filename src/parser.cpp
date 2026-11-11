@@ -725,8 +725,17 @@ struct Parser {
                 next();
                 if (!isId("import")) err("sau '#' mong đợi 'import'");
                 next();
-                if (cur().kind != T::Str) err("#import cần đường dẫn dạng chuỗi: #import \"scr/shell.2o\"");
-                m.imports.push_back({ps, next().text});
+                if (isOp("<")) {  // #import <CioStyle>: thư viện chuẩn
+                    next();
+                    if (cur().kind != T::Ident) err("#import <...> cần tên thư viện: #import <CioStyle>");
+                    std::string nm = next().text;
+                    if (!isOp(">")) err("thiếu '>' sau tên thư viện");
+                    next();
+                    m.imports.push_back({ps, nm, true});
+                } else {
+                    if (cur().kind != T::Str) err("#import cần đường dẫn dạng chuỗi (#import \"scr/shell.2o\") hoặc thư viện chuẩn (#import <CioStyle>)");
+                    m.imports.push_back({ps, next().text, false});
+                }
             } else if (isId("global")) {
                 if (m.hasGlobal) fail(ps, "khối global bị khai báo hai lần");
                 m.hasGlobal = true;
